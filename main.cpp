@@ -30,24 +30,6 @@
 #include "../libs/emscripten/emscripten_mainloop_stub.h"
 #endif
 
-static void ShowAppMainMenuBar()
-{
-    if (ImGui::BeginMainMenuBar())
-    {
-        if (ImGui::BeginMenu("Edit"))
-        {
-            if (ImGui::MenuItem("Undo", "CTRL+Z")) {}
-            if (ImGui::MenuItem("Redo", "CTRL+Y", false, false)) {}  // Disabled item
-            ImGui::Separator();
-            if (ImGui::MenuItem("Cut", "CTRL+X")) {}
-            if (ImGui::MenuItem("Copy", "CTRL+C")) {}
-            if (ImGui::MenuItem("Paste", "CTRL+V")) {}
-            ImGui::EndMenu();
-        }
-        ImGui::EndMainMenuBar();
-    }
-}
-
 static void glfw_error_callback(int error, const char* description)
 {
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
@@ -131,6 +113,8 @@ int main(int, char**)
 
     // Our state
     bool show_login_window = true;
+    static char username[64];
+    static char password[64];
     ImVec4 clear_color = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
 
     // Main loop
@@ -155,6 +139,34 @@ int main(int, char**)
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        // Main Menu
+        if (ImGui::BeginMainMenuBar())
+        {
+            if (ImGui::BeginMenu("Arquivos")) {
+				if (ImGui::MenuItem("Novo", "Ctrl+N")) { /* Do stuff */ }
+				if (ImGui::MenuItem("Salvar", "Ctrl+S")) { /* Do stuff */ }
+				if (ImGui::MenuItem("Exportar", "Ctrl+E")) { /* Do stuff */ }
+				ImGui::Separator();
+				if (ImGui::MenuItem("Sair")) { glfwSetWindowShouldClose(window, GLFW_TRUE); }
+				ImGui::EndMenu();
+			}   
+            if (ImGui::BeginMenu("Login"))
+            {
+                if (db.IsLoggedIn()) {
+                    ImGui::SeparatorText(("Logado como %s", db.GetUsername()));
+                    if (ImGui::MenuItem("Logout")) {
+						db.Logout();
+					}
+                } else {
+                    if (ImGui::MenuItem("Login")) {
+						show_login_window = true;
+					}
+				}
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+
         // Basic App
         if (ImGui::Begin("GuiNotes")) {
 			
@@ -163,8 +175,6 @@ int main(int, char**)
         // Login Window
         if (show_login_window) {
             if (ImGui::Begin("Login")) {
-                static char username[64];
-                static char password[64];
                 ImGui::InputText("Username", username, 64);
                 ImGui::InputText("Password", password, 64, ImGuiInputTextFlags_Password);
                 if (ImGui::Button("Login")) {
