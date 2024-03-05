@@ -168,9 +168,20 @@ int main(int, char**)
         }
 
         // Basic App
-        if (ImGui::Begin("GuiNotes")) {
-			
-        } ImGui::End();
+        static bool use_work_area = true;
+        static ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
+
+        // We demonstrate using the full viewport area or the work area (without menu-bars, task-bars etc.)
+        // Based on your use case you may want one or the other.
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
+
+        if (ImGui::Begin("Main", &use_work_area, flags))
+        {
+            
+        }
+        ImGui::End();
 
         // Login Window
         if (show_login_window) {
