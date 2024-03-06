@@ -155,3 +155,34 @@ char* DB::GetPassword() const {
 bool DB::IsLoggedIn() const {
 	return this->logged_in;
 };
+
+std::vector<std::tuple<std::string, std::string>> DB::GetNotes()
+{
+	if (!this->logged_in) {
+		throw std::string("NotLoggedInException: User is not logged in");
+	}
+	pugi::xml_node notes = this->root.child("Note");
+	std::vector<std::tuple<std::string, std::string>> note_list;
+	for (pugi::xml_node note = notes.first_child(); note; note = note.next_sibling()) {
+		std::string title = note.attribute("title").as_string();
+		std::string content = note.attribute("content").as_string();
+		note_list.push_back(std::tuple<std::string, std::string>(title, content));
+	}
+	return note_list;
+};
+
+void DB::SaveNoteTitle(std::string* old_title, std::string* new_title)
+{
+	if (!this->logged_in) {
+		throw std::string("NotLoggedInException: User is not logged in");
+	}
+	pugi::xml_node notes = this->root.child("Note");
+	auto note = notes.find_child_by_attribute("title", old_title->c_str());
+	if (note != PUGIXML_NULL) {
+		note.attribute("title").set_value(new_title->c_str());
+	}
+	else {
+		throw std::string("NoteNotFoundException: Note with title " + *old_title + " does not exist");
+	}
+};
+}

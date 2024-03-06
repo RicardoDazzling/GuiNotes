@@ -5,6 +5,7 @@
 #include "AES/AES.h"
 #include "SHA256/SHA256.h"
 
+#include <tuple>
 #include <fstream>
 
 std::vector<unsigned char> iv = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
@@ -35,6 +36,8 @@ public:
 	char* GetUsername() const;
 	char* GetPassword() const;
 	bool IsLoggedIn() const;
+	std::vector<std::tuple<std::string, std::string>> GetNotes();
+	void SaveNoteTitle(std::string* old_title, std::string* new_title);
 };
 
 
