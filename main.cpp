@@ -30,10 +30,48 @@
 #include "../libs/emscripten/emscripten_mainloop_stub.h"
 #endif
 
+std::string imvector_to_string(ImVector<char> vec) {
+	std::string str;
+	for (int i = 0; i < vec.size(); i++) {
+		str += vec[i];
+	}
+	return str;
+}
+
 static void glfw_error_callback(int error, const char* description)
 {
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
+
+struct Funcs
+{
+    static int MyResizeCallback(ImGuiInputTextCallbackData* data)
+    {
+        if (data->EventFlag == ImGuiInputTextFlags_CallbackResize)
+        {
+            ImVector<char>* my_str = (ImVector<char>*)data->UserData;
+            IM_ASSERT(my_str->begin() == data->Buf);
+            my_str->resize(data->BufSize); // NB: On resizing calls, generally data->BufSize == data->BufTextLen + 1
+
+            data->Buf = my_str->begin();
+        }
+        return 0;
+    }
+
+    // Note: Because ImGui:: is a namespace you would typically add your own function into the namespace.
+    // For example, you code may declare a function 'ImGui::InputText(const char* label, MyString* my_str)'
+    static bool MyInputTextMultiline(const char* label, ImVector<char>* my_str, const ImVec2& size = ImVec2(0, 0), ImGuiInputTextFlags flags = 0)
+    {
+        IM_ASSERT((flags & ImGuiInputTextFlags_CallbackResize) == 0);
+        return ImGui::InputTextMultiline(label, my_str->begin(), (size_t)my_str->size(), size, flags | ImGuiInputTextFlags_CallbackResize, Funcs::MyResizeCallback, (void*)my_str);
+    }
+
+    static bool MyInputTextWithHint(const char* label, const char* hint_text, ImVector<char>* my_str, ImGuiInputTextFlags flags = 0)
+    {
+        IM_ASSERT((flags & ImGuiInputTextFlags_CallbackResize) == 0);
+        return ImGui::InputTextWithHint(label, hint_text, my_str->begin(), (size_t)my_str->size(), flags | ImGuiInputTextFlags_CallbackResize, Funcs::MyResizeCallback, (void*)my_str);
+    }
+};
 
 // Main code
 int main(int, char**)
@@ -116,7 +154,11 @@ int main(int, char**)
     static char username[64];
     static char password[64];
     static bool rename = false;
+    static std::string title;
+    static std::string content;
+    static bool selected = false;
     static unsigned int note_id;
+    static ImVector<char> title_str;
     ImVec4 clear_color = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
 
     // Main loop
@@ -145,25 +187,26 @@ int main(int, char**)
         if (ImGui::BeginMainMenuBar())
         {
             if (ImGui::BeginMenu("Arquivos")) {
-				if (ImGui::MenuItem("Novo", "Ctrl+N")) { /* Do stuff */ }
-				if (ImGui::MenuItem("Salvar", "Ctrl+S")) { /* Do stuff */ }
-				if (ImGui::MenuItem("Exportar", "Ctrl+E")) { /* Do stuff */ }
-				ImGui::Separator();
-				if (ImGui::MenuItem("Sair")) { glfwSetWindowShouldClose(window, GLFW_TRUE); }
-				ImGui::EndMenu();
-			}   
+                if (ImGui::MenuItem("Novo", "Ctrl+N")) { /* Do stuff */ }
+                if (ImGui::MenuItem("Salvar", "Ctrl+S")) { /* Do stuff */ }
+                if (ImGui::MenuItem("Exportar", "Ctrl+E")) { /* Do stuff */ }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Sair")) { glfwSetWindowShouldClose(window, GLFW_TRUE); }
+                ImGui::EndMenu();
+            }
             if (ImGui::BeginMenu("Login"))
             {
                 if (db.IsLoggedIn()) {
                     ImGui::SeparatorText(("Logado como %s", db.GetUsername()));
                     if (ImGui::MenuItem("Logout")) {
-						db.Logout();
-					}
-                } else {
+                        db.Logout();
+                    }
+                }
+                else {
                     if (ImGui::MenuItem("Login")) {
-						show_login_window = true;
-					}
-				}
+                        show_login_window = true;
+                    }
+                }
                 ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
@@ -179,60 +222,64 @@ int main(int, char**)
         ImGui::SetNextWindowPos(viewport->WorkPos);
         ImGui::SetNextWindowSize(viewport->WorkSize);
 
-        if (ImGui::Begin("Main", &use_work_area, flags))
-        {
-            std::vector<std::tuple<std::string, std::string>> notes = db.GetNotes();
-            ImGuiWindowFlags window_flags = ImGuiWindowFlags_None;
-            window_flags |= ImGuiWindowFlags_NoScrollWithMouse;
-            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
-            unsigned int id = 0;
-            for (std::vector<std::tuple<std::string, std::string>>::const_iterator i = notes.begin(); i != notes.end(); ++i) {
-                std::string title = std::get<0>(*i);
-                std::string content = std::get<1>(*i);
-                ImGui::BeginChild(("Child ###%d", id), ImVec2(0, 256), ImGuiChildFlags_Border, window_flags);
-                if (rename && note_id == id){
-                    static char title_char[500] = "";
-                    for (int i = 0; i < title.size(); i++) {
-                        title_char[i] = title[i];
+        if (!selected) {
+            if (ImGui::Begin("Main", &use_work_area, flags))
+            {
+                std::vector<std::tuple<std::string, std::string>> notes = db.GetNotes();
+                ImGuiWindowFlags window_flags = ImGuiWindowFlags_None;
+                window_flags |= ImGuiWindowFlags_NoScrollWithMouse;
+                ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+                unsigned int id = 0;
+                for (std::vector<std::tuple<std::string, std::string>>::const_iterator i = notes.begin(); i != notes.end(); ++i) {
+                    std::string _title = std::get<0>(*i);
+                    std::string _content = std::get<1>(*i);
+                    ImGui::BeginChild(("Child ##%d", id), ImVec2(0, 256), ImGuiChildFlags_Border, window_flags);
+
+                    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                        title = _title;
+                        content = _content;
+                        selected = true;
                     }
-                    if (ImGui::InputTextWithHint("", "Escreva um título", title_char, IM_ARRAYSIZE(title_char), ImGuiInputTextFlags_EnterReturnsTrue)) {
+
+                    const int length = _content.length();
+                    char* content_char = new char[length + 1];
+                    strcpy(content_char, _content.c_str());
+
+                    ImGui::Text(_title.c_str());
+                    char buff[25];
+                    snprintf(buff, sizeof(buff), "##%d", id);
+                    ImGui::InputTextMultiline(buff, content_char, IM_ARRAYSIZE(content_char), ImVec2(0, 0), ImGuiInputTextFlags_ReadOnly);
+
+                    ImGui::EndChild();
+                    ImGui::PopStyleVar();
+                }
+            }
+            ImGui::End();
+        }
+        else {
+
+            // Note Window
+            if (ImGui::Begin("Note")) {
+
+                if (rename) {
+                    if (title_str.empty()) {
+                        title_str.Data = (char*)title.c_str();
+					}
+                    if (Funcs::MyInputTextWithHint("", "Escreva um título", &title_str, ImGuiInputTextFlags_EnterReturnsTrue)) {
                         std::string new_title(title_char);
                         db.SaveNoteTitle(&title, &new_title);
-						rename = false;
+                        rename = false;
                         note_id = 0;
                         std::vector<std::tuple<std::string, std::string>> notes = db.GetNotes();
                     };
                 }
                 else {
                     ImGui::Text(title.c_str());
-                    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)){
+                    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
                         rename = true;
                         note_id = id;
                     }
-				}
-                struct Funcs
-                {
-                    static int MyResizeCallback(ImGuiInputTextCallbackData* data)
-                    {
-                        if (data->EventFlag == ImGuiInputTextFlags_CallbackResize)
-                        {
-                            ImVector<char>* my_str = (ImVector<char>*)data->UserData;
-                            IM_ASSERT(my_str->begin() == data->Buf);
-                            my_str->resize(data->BufSize); // NB: On resizing calls, generally data->BufSize == data->BufTextLen + 1
-                         
-                            data->Buf = my_str->begin();
-                        }
-                        return 0;
-                    }
-
-                    // Note: Because ImGui:: is a namespace you would typically add your own function into the namespace.
-                    // For example, you code may declare a function 'ImGui::InputText(const char* label, MyString* my_str)'
-                    static bool MyInputTextMultiline(const char* label, ImVector<char>* my_str, const ImVec2& size = ImVec2(0, 0), ImGuiInputTextFlags flags = 0)
-                    {
-                        IM_ASSERT((flags & ImGuiInputTextFlags_CallbackResize) == 0);
-                        return ImGui::InputTextMultiline(label, my_str->begin(), (size_t)my_str->size(), size, flags | ImGuiInputTextFlags_CallbackResize, Funcs::MyResizeCallback, (void*)my_str);
-                    }
-                };
+                }
 
                 // For this demo we are using ImVector as a string container.
                 // Note that because we need to store a terminating zero character, our size/capacity are 1 more
@@ -240,16 +287,9 @@ int main(int, char**)
                 static ImVector<char> my_str;
                 if (my_str.empty())
                     my_str.push_back(0);
-                Funcs::MyInputTextMultiline("", &my_str, ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 16), ImGuiInputTextFlags_ReadOnly);
-                if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
-                    /* do something */
-                }
-
-                ImGui::EndChild();
-                ImGui::PopStyleVar();
-            }
+                Funcs::MyInputTextMultiline("", &my_str, ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 16));
+            } ImGui::End();
         }
-        ImGui::End();
 
         // Login Window
         if (show_login_window) {
