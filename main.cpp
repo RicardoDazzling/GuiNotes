@@ -159,6 +159,7 @@ int main(int, char**)
     static bool selected = false;
     static unsigned int note_id;
     static ImVector<char> title_str;
+    static ImVector<char> content_str;
     ImVec4 clear_color = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
 
     // Main loop
@@ -239,6 +240,8 @@ int main(int, char**)
                         title = _title;
                         content = _content;
                         selected = true;
+                        title_str.Data = (char*)title.c_str();
+                        content_str.Data = (char*)content.c_str();
                     }
 
                     const int length = _content.length();
@@ -266,10 +269,9 @@ int main(int, char**)
                         title_str.Data = (char*)title.c_str();
 					}
                     if (Funcs::MyInputTextWithHint("", "Escreva um título", &title_str, ImGuiInputTextFlags_EnterReturnsTrue)) {
-                        std::string new_title(title_char);
+                        std::string new_title = imvector_to_string(title_str);
                         db.SaveNoteTitle(&title, &new_title);
                         rename = false;
-                        note_id = 0;
                         std::vector<std::tuple<std::string, std::string>> notes = db.GetNotes();
                     };
                 }
@@ -277,17 +279,15 @@ int main(int, char**)
                     ImGui::Text(title.c_str());
                     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
                         rename = true;
-                        note_id = id;
                     }
                 }
 
                 // For this demo we are using ImVector as a string container.
                 // Note that because we need to store a terminating zero character, our size/capacity are 1 more
                 // than usually reported by a typical string class.
-                static ImVector<char> my_str;
-                if (my_str.empty())
-                    my_str.push_back(0);
-                Funcs::MyInputTextMultiline("", &my_str, ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 16));
+                if (content_str.empty())
+                    content_str.Data = (char*)content.c_str();
+                Funcs::MyInputTextMultiline("", &content_str, ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 16));
             } ImGui::End();
         }
 
